@@ -149,6 +149,7 @@ globalThis.CopoWebsiteCopy = {
         "languageName": "简体中文",
         "carouselPrevious": "上一张",
         "carouselNext": "下一张",
+        "carouselFits": "工具目录未超出屏宽，自动巡展中；箭头仅在超出时可用。",
         "draft": "草案 · 尚未生效",
         "date": "草案更新：2026 年 10 月 13 日",
         "back": "返回首页",
@@ -201,8 +202,28 @@ globalThis.CopoWebsiteCopy = {
         "jsonLabel": "需求草稿 JSON",
         "required": "必填",
         "validation": "标题、范围与验收条件不能只含空白。",
-        "generated": "草稿已生成。你可以复制下方文本；资料尚未发送。",
+        "generated": "草稿已生成。资料尚未发送。",
+        "stepDraft": "第 1 步 · 整理需求",
+        "stepNext": "第 2 步 · 继续合作",
         "downloaded": "已生成下载文件，尚未发送。内容不变时保留同一询单编号。",
+        "nextTitle": "草稿已就绪 · 下一步这样继续",
+        "nextSteps": [
+          ["1", "带走草稿", "复制飞书可读草稿（含询单编号），内容不变时保留同一编号。"],
+          ["2", "发给 Copo", "点「复制并打开飞书」，在会话里粘贴发送；Copo 逐项核对范围、费用与验收。"],
+          ["3", "进入合作", "双方确认同一版报价后签约推进；每一步都有记录可核对。"]
+        ],
+        "copyDraft": "复制飞书可读草稿",
+        "copyDraftDone": "草稿全文已复制，可直接粘贴。",
+        "copyFailed": "复制未成功，请手动全选下方文本复制。",
+        "feishuReady": "复制并打开飞书",
+        "feishuOpened": "草稿已复制，飞书打开后粘贴发送即可。",
+        "feishuPending": "公开联系渠道确认后，这里会出现「复制并打开飞书」直达入口；当前可先复制草稿备用。",
+        "pasteKicker": "【Copo 需求草稿】",
+        "pasteService": "服务",
+        "pasteTitle": "标题",
+        "pasteDescription": "需求描述",
+        "pasteAcceptance": "验收条件",
+        "pasteFooter": "（由 Copo 官网页面草稿生成，内容尚未发送）",
         "cleared": "已清空本页需求草稿。",
         "privacyHint": "草稿仅在当前页面生成，本页不主动持久化保存输入。浏览器可能保留填写状态；可用清空按钮删除当前输入，下载文件由你保管。",
         "unavailable": "当前浏览器无法生成草稿编号，请使用新版浏览器打开本地预览。",
@@ -256,8 +277,9 @@ globalThis.CopoWebsiteCopy = {
   "pause": "暂停滚动",
   "resume": "继续滚动",
   "entry": "进入工作台",
-  "publicNote": "当前可查看工具目录与验证阶段。工具运行尚未在公网开放。",
-  "local": "工具入口在本地工作台开放",
+          "publicNote": "当前可查看工具目录与验证阶段。工具运行尚未在公网开放。",
+          "local": "工具运行入口在本机工作台开放（仅本机可用）：",
+          "localEntry": "打开本机工作台",
   "stages": {
     "candidate": "研究候选",
     "verified": "已验证 · 开发试点",
@@ -496,6 +518,17 @@ globalThis.CopoWebsiteCopy = {
         "disclosureText": "本预览没有宣称安全认证、零泄露或全面合规。正式主体、联系渠道、处理地区、资料保留期限和接收方关系仍需核定。当前法律页面为阅读草案，尚未生效。"
       },
       "landing": {
+        "status": {
+          "eyebrow": "WHAT'S NEW",
+          "title": "Copo 当前的状态",
+          "intro": "以下进展均已在实际环境验证并留有记录；如实展示，不把预览当成上线。",
+          "items": [
+            ["2026-10-18", "签约节点上线", "报价双方确认后自动生成结构化合同草稿，签约前逐项审查，双方签署回执全程留痕可核对。"],
+            ["2026-10-17", "工作台看板", "交付支撑工具目录与研发改进流程的角色、进展和产物，在同一处可视化。"],
+            ["2026-10-14", "手机与桌面统一", "官网与后台在手机与桌面宽度下使用同一套功能、说明与数据隔离。"]
+          ],
+          "note": "官网仍为展示与浏览器草稿；线上收件、签约与支付尚未开放。"
+        },
         "editorial": {
           "heroCardKicker": "FROM SCOPE TO DELIVERY",
           "heroCardAction": "查看交付示例",
