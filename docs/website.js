@@ -128,29 +128,38 @@
   function setupCarousels() {
     document.querySelectorAll("[data-brand-carousel]").forEach(section => {
       const track = section.querySelector("[data-carousel-track]");
-      const cards = Array.from(track.children);
+      const marquee = track.parentElement;
+      const group = track.querySelector(".workbench-marquee-group:not([aria-hidden])");
+      const prev = section.querySelector("[data-carousel-prev]");
+      const next = section.querySelector("[data-carousel-next]");
       const status = section.querySelector("[data-carousel-status]");
-      let current = 0;
-      const show = index => {
-        current = Math.max(0, Math.min(cards.length - 1, index));
-        const first = cards[0];
-        const gap = parseFloat(getComputedStyle(track).columnGap) || 32;
-        track.style.transform = `translateX(${(document.documentElement.dir === "rtl" ? 1 : -1) * current * (first.getBoundingClientRect().width + gap)}px)`;
-        section.querySelector("[data-carousel-prev]").disabled = current === 0;
-        section.querySelector("[data-carousel-next]").disabled = current === cards.length - 1;
-        const visibleCount = Math.max(1, Math.floor((section.getBoundingClientRect().width + gap) / (first.getBoundingClientRect().width + gap)));
-        cards.forEach((card, index) => { card.inert = index < current || index >= current + visibleCount; });
-        status.textContent = `${current + 1} / ${cards.length}`;
+      if (!track || !prev || !next) return;
+      const gap = () => parseFloat(getComputedStyle(track.firstElementChild).columnGap) || 18;
+      // Only one non-clone set counts: when it fits the viewport the marquee
+      // already shows everything and both arrows must stay inert.
+      const overflowing = () => (group ? group.getBoundingClientRect().width + gap() : track.scrollWidth) > marquee.clientWidth + 1;
+      const update = () => {
+        const disabled = !overflowing();
+        prev.disabled = disabled || marquee.scrollLeft <= 0;
+        next.disabled = disabled || marquee.scrollLeft >= marquee.scrollWidth - marquee.clientWidth - 1;
+        if (status) status.textContent = disabled ? t("ui.carouselFits") : `${Math.round(marquee.scrollLeft / (marquee.clientWidth || 1)) + 1} / ${Math.max(1, Math.ceil((marquee.scrollWidth - marquee.clientWidth) / (marquee.clientWidth || 1)) + 1)}`;
       };
-      section.querySelector("[data-carousel-prev]").addEventListener("click", () => show(current - 1));
-      section.querySelector("[data-carousel-next]").addEventListener("click", () => show(current + 1));
+      const page = (direction, target) => {
+        if (!overflowing()) return;
+        section.classList.add("is-paused");  // manual browsing pauses the drift
+        marquee.scrollTo({ left: direction * marquee.clientWidth, behavior: "smooth" });
+        if (target !== undefined) marquee.scrollTo({ left: target, behavior: "smooth" });
+      };
+      prev.addEventListener("click", () => page(-1));
+      next.addEventListener("click", () => page(1));
       section.addEventListener("keydown", event => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         event.preventDefault();
-        show(event.key === "Home" ? 0 : event.key === "End" ? cards.length - 1 : current + (event.key === "ArrowRight" ? 1 : -1));
+        page(event.key === "ArrowRight" ? 1 : -1, event.key === "Home" ? 0 : event.key === "End" ? marquee.scrollWidth : undefined);
       });
-      globalThis.addEventListener?.("resize", () => show(current));
-      show(0);
+      marquee.addEventListener("scroll", update, { passive: true });
+      globalThis.addEventListener?.("resize", update);
+      update();
     });
   }
   function workbenchMarkup() {
@@ -165,8 +174,14 @@
       "reverse-research": '<path d="m11 7-6 9 6 9M21 7l6 9-6 9M18 6l-4 20"/>'
     };
     const cards = tools.map(tool => `<article class="workbench-public-tool" data-tool-id="${escape(tool.id)}"><div class="workbench-tool-top"><span class="workbench-brand-echo" aria-hidden="true">${logo}</span><span class="workbench-tool-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${symbols[tool.id] || symbols["design-canvas"]}</svg></span><span class="small-label">${escape(tool.product)}</span></div><h3>${escape(tool.name)}</h3><p>${escape(tool.summary)}</p><span class="workbench-public-stage">${escape(labels.stages[tool.stage])}</span></article>`).join("");
-    if (page === "workbench") return `<section class="container workbench-showcase workbench-page" id="workbench"><div class="workbench-section-header"><div>${eyebrow(labels.eyebrow)}<h1>${escape(labels.title)}</h1></div><p>${escape(labels.intro)}</p></div><p class="workbench-access-note">${escape(labels.publicNote)}</p><div class="workbench-page-grid">${cards}</div></section>`;
-    return `<section class="container workbench-showcase" id="workbench" data-brand-carousel><div class="workbench-section-header module-overview"><div>${eyebrow(labels.eyebrow)}<${heading}>${editorialTitle(labels.displayTitle)}</${heading}></div><p>${escape(labels.intro)}</p><a class="button workbench-entry" href="workbench.html">${escape(labels.entry)}</a></div><div class="workbench-marquee" role="region" aria-label="${escape(labels.label)}" tabindex="0"><div class="workbench-marquee-track" id="workbench-track" data-carousel-track>${cards}</div></div>${carouselControls("workbench-track")}</section>`;
+    // The operator reaches the real console from the locally served site; hosted
+    // surfaces keep the static directory, and LAN adds a same-machine only link.
+    const localEntry = !hosted ? `/workbench` : "workbench.html";
+    const lanNote = hosted && document.body.dataset.surface === "lan"
+      ? `<p class="workbench-access-note workbench-local-entry">${escape(labels.local)} <a href="http://127.0.0.1:8787/workbench">${escape(labels.localEntry)}</a></p>` : "";
+    if (page === "workbench") return `<section class="container workbench-showcase workbench-page" id="workbench"><div class="workbench-section-header"><div>${eyebrow(labels.eyebrow)}<h1>${escape(labels.title)}</h1></div><p>${escape(labels.intro)}</p></div><p class="workbench-access-note">${escape(labels.publicNote)}</p>${lanNote}<div class="workbench-page-grid">${cards}</div></section>`;
+    const loop = (body, clone) => `<div class="workbench-marquee-group"${clone ? ' aria-hidden="true" inert' : ""}>${body}</div>`;
+    return `<section class="container workbench-showcase" id="workbench" data-brand-carousel><div class="workbench-section-header module-overview"><div>${eyebrow(labels.eyebrow)}<${heading}>${editorialTitle(labels.displayTitle)}</${heading}></div><p>${escape(labels.intro)}</p><a class="button workbench-entry" href="${localEntry}">${escape(labels.entry)}</a></div><div class="workbench-marquee" role="region" aria-label="${escape(labels.label)}" tabindex="0"><div class="workbench-marquee-track" id="workbench-track" data-carousel-track>${loop(cards)}${loop(cards, true)}</div></div>${carouselControls("workbench-track")}</section>`;
   }
 
   function homeMarkup() {
@@ -182,10 +197,11 @@
       <section class="showcase-section container"><header class="module-overview"><h2>${lines(layout.showcaseTitle)}</h2><p>${escape(layout.showcaseIntro)}</p></header><div class="showcase-grid">${journeyMarkup(demo, layout)}<aside class="services-section service-directory reveal" id="services"><div class="service-brand-art" aria-hidden="true"><span class="service-brand-disc disc-pink">${logo}</span><span class="service-brand-disc disc-blue">${logo}</span></div><div class="service-tag-cloud">${layout.serviceTags.map(([label, id]) => `<a href="#inquiry" data-service="${escape(id)}">${escape(label)}</a>`).join("")}</div><div class="directory-heading"><h2>${lines(layout.servicesTitle)}</h2><p>${lines(layout.servicesIntro)}</p></div></aside></div></section>
       ${animationDemoMarkup(demo, layout)}
       <section class="project-section container section-space" id="pricing"><div class="section-top module-overview reveal">${eyebrow(h.quoteEyebrow)}<h2>${editorialTitle(style.projectTitle)}</h2><p>${escape(style.projectIntro)}</p></div><div class="project-panel reveal"><div class="project-visual" data-motion-card><div class="project-card brand-canvas" aria-hidden="true"><div class="brand-canvas-pattern">${[0,1,2,3].map(() => `<span>${logo}</span>`).join("")}</div><div class="brand-canvas-caption">${wordmark}<span>${escape(style.cardCaption)}</span></div></div><div class="project-visual-copy"><span class="offer-badge"><i aria-hidden="true"></i>${escape(style.projectBadge)}</span><h3>${editorialTitle(style.projectInvitation)}</h3><p>${escape(style.projectVisualCaption)}</p></div></div><div class="project-copy"><span class="project-brand-echo" aria-hidden="true">${logo}</span><p class="project-kicker">${escape(style.projectKicker)}</p><h3>${escape(style.projectHeading)}</h3><p>${escape(h.quoteText)}</p><ul>${style.projectPoints.map(point => `<li><span aria-hidden="true">✓</span>${escape(point)}</li>`).join("")}</ul>${button(style.projectAction, "#inquiry")}<p class="project-fine">${escape(h.quoteFoot)}</p></div></div></section>
+      <section class="status-section container" id="status"><div class="module-overview">${eyebrow(landing.status.eyebrow)}<h2>${escape(landing.status.title)}</h2><p>${escape(landing.status.intro)}</p></div><ol class="status-list">${landing.status.items.map(([date, title, body]) => `<li class="reveal" data-motion-card><time>${escape(date)}</time><div><h3>${escape(title)}</h3><p>${escape(body)}</p></div></li>`).join("")}</ol><p class="status-note">${escape(landing.status.note)}</p></section>
       <section class="homepage-trust-note container"><div><h2>${escape(landing.trust.title)}</h2><p>${escape(landing.trust.text)}</p></div><a class="text-link" href="trust.html">${escape(landing.trust.link)}${arrow}</a></section>
       <section class="faq-section section-space" id="faq"><div class="container faq-inner"><div class="faq-main"><div class="faq-heading"><h2><em>${escape(style.faqTitle[0])}</em><br>${escape(style.faqTitle[1])}</h2></div><div class="faq-list">${h.faq.map(([question, answer, references = []]) => `<details><summary>${escape(question)}<span aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="m5 7 5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary><p>${escape(answer)} ${references.map(([label, url]) => sourceLink(label, url)).join(" · ")}</p></details>`).join("")}</div></div><aside class="faq-contact-card"><span class="faq-contact-mark" aria-hidden="true">${logo}</span><h3>${lines(style.faqCardTitle)}</h3><a class="faq-contact-action" href="#inquiry">${escape(style.faqCardAction)}</a><a class="faq-contact-support" href="support.html"><span><small>${escape(style.faqCardSupport)}</small><strong>${escape(style.faqLink)}</strong></span>${arrow}</a></aside></div></section>
       <section class="closing-section" id="inquiry"><div class="container closing-inner"><div>${eyebrow(h.ctaEyebrow)}<h2>${editorialTitle(style.closingTitle)}</h2><p>${escape(style.closingText)}</p><div class="closing-actions">${button(hero.primary, "#inquiry")}<a href="#chat">${escape(hero.secondary)}${arrow}</a></div><p class="closing-note">${escape(style.closingNote)}</p></div><div class="closing-art closing-brand-art" aria-hidden="true">${wordmark}</div></div></section>
-      <dialog id="inquiry-dialog" class="inquiry-dialog" aria-labelledby="inquiry-title"><div class="inquiry-dialog-heading"><div>${eyebrow(h.ctaEyebrow)}<h2 id="inquiry-title">${escape(style.dialogTitle)}</h2></div><button type="button" data-inquiry-close aria-label="${ui("close")}">×</button></div><p class="inquiry-dialog-note">${ui("inquiryState")}</p><form id="inquiry-form"><label>${escape(t("ui.inquiryFields")[0])}<select name="package_id">${h.services.map(service => `<option value="${service.id}">${escape(service.title)}</option>`).join("")}</select></label><label>${escape(t("ui.inquiryFields")[1])}<span class="field-required">${ui("required")}</span><input name="title" required maxlength="160" placeholder="${escape(t("ui.inquiryPlaceholders")[0])}"></label><label>${escape(t("ui.inquiryFields")[2])}<span class="field-required">${ui("required")}</span><textarea name="description" required maxlength="10000" rows="3" placeholder="${escape(t("ui.inquiryPlaceholders")[1])}"></textarea></label><label>${escape(t("ui.inquiryFields")[3])}<span class="field-required">${ui("required")}</span><textarea name="acceptance" required maxlength="5000" rows="2" placeholder="${escape(t("ui.inquiryPlaceholders")[2])}"></textarea></label><label class="consent"><input type="checkbox" name="safe_summary" required><span>${ui("consent")}</span></label><div class="form-actions"><button class="button" type="submit">${ui("download")}</button><button class="button button-outline" id="generate-inquiry" type="button">${ui("generate")}</button><button class="reset-button" type="reset">${ui("reset")}</button></div><p class="fine">${ui("privacyHint")}</p><p id="form-result" class="form-result" role="status" aria-live="polite"></p><label id="copy-area" hidden>${ui("jsonLabel")}<textarea id="inquiry-json" readonly rows="8" spellcheck="false"></textarea></label></form></dialog>`;
+      <dialog id="inquiry-dialog" class="inquiry-dialog" aria-labelledby="inquiry-title"><div class="inquiry-dialog-heading"><div>${eyebrow(h.ctaEyebrow)}<h2 id="inquiry-title">${escape(style.dialogTitle)}</h2></div><button type="button" data-inquiry-close aria-label="${ui("close")}">×</button></div><p class="inquiry-dialog-note">${ui("inquiryState")}</p><form id="inquiry-form"><p class="inquiry-step-label">${ui("stepDraft")}</p><div class="inquiry-fields"><label>${escape(t("ui.inquiryFields")[0])}<select name="package_id">${h.services.map(service => `<option value="${service.id}">${escape(service.title)}</option>`).join("")}</select></label><label>${escape(t("ui.inquiryFields")[1])}<span class="field-required">${ui("required")}</span><input name="title" required maxlength="160" placeholder="${escape(t("ui.inquiryPlaceholders")[0])}"></label><label>${escape(t("ui.inquiryFields")[2])}<span class="field-required">${ui("required")}</span><textarea name="description" required maxlength="10000" rows="3" placeholder="${escape(t("ui.inquiryPlaceholders")[1])}"></textarea></label><label>${escape(t("ui.inquiryFields")[3])}<span class="field-required">${ui("required")}</span><textarea name="acceptance" required maxlength="5000" rows="2" placeholder="${escape(t("ui.inquiryPlaceholders")[2])}"></textarea></label><label class="consent"><input type="checkbox" name="safe_summary" required><span>${ui("consent")}</span></label></div><div class="form-actions"><button class="button" type="submit">${ui("download")}</button><button class="button button-outline" id="generate-inquiry" type="button">${ui("generate")}</button><button class="reset-button" type="reset">${ui("reset")}</button></div><p class="fine">${ui("privacyHint")}</p><p id="form-result" class="form-result" role="status" aria-live="polite"></p><label id="copy-area" hidden>${ui("jsonLabel")}<textarea id="inquiry-json" readonly rows="8" spellcheck="false"></textarea></label></form><section id="inquiry-next" class="inquiry-next" hidden><p class="inquiry-step-label">${ui("stepNext")}</p><h3>${ui("nextTitle")}</h3><ol>${t("ui.nextSteps").map(([step, title, body]) => `<li><span class="inquiry-next-step" aria-hidden="true">${escape(step)}</span><div><strong>${escape(title)}</strong><p>${escape(body)}</p></div></li>`).join("")}</ol><div class="inquiry-next-actions">${typeof t("inquiry.feishuUrl") === "string" && t("inquiry.feishuUrl") ? `<button type="button" class="button" id="open-feishu">${ui("feishuReady")}</button><button type="button" class="button button-outline" id="copy-draft">${ui("copyDraft")}</button>` : `<button type="button" class="button" id="copy-draft">${ui("copyDraft")}</button><p class="inquiry-next-pending">${ui("feishuPending")}</p>`}</div></section></dialog>`;
   }
 
   function aboutMarkup() {
@@ -200,10 +216,14 @@
 
   function legalMarkup() {
     const legal = t(`legal.${page}`);
-    return `<section class="legal-hero container">${eyebrow(legal.eyebrow)}<h1>${escape(legal.title)}</h1><p class="legal-summary">${escape(legal.summary)}</p><div class="legal-meta"><span class="draft-pill">${ui("draft")}</span><span>${ui("date")}</span></div></section><div class="container legal-layout"><aside class="legal-sidebar"><p class="small-label">${ui("legalNav")}</p><nav aria-label="${ui("legalNav")}">${legal.sections.map(section => `<a href="#${escape(section.id)}">${escape(section.title)}</a>`).join("")}</nav><a class="text-link" href="index.html">${ui("back")}${arrow}</a></aside><article class="legal-content"><div class="legal-notice"><span aria-hidden="true">◇</span><p>${escape(legal.notice)}</p></div>${legal.sections.map(section => `<section id="${escape(section.id)}"><h2>${escape(section.title)}</h2>${section.paragraphs.map(paragraph => `<p>${escape(paragraph)}</p>`).join("")}</section>`).join("")}<div class="legal-related"><span class="small-label">${ui("related")}</span>${[["privacy", 8], ["terms", 9], ["ai", 5], ["support", 6]].filter(([key]) => key !== page).map(([key, index]) => `<a href="${key}.html">${escape(t("ui.footerLinks")[index])}${arrow}</a>`).join("")}</div></article></div>`;
+    return `<section class="legal-hero container">${eyebrow(legal.eyebrow)}<h1>${escape(legal.title)}</h1><p class="legal-summary">${escape(legal.summary)}</p><div class="legal-meta"><span class="draft-pill">${ui("draft")}</span><span>${ui("date")}</span></div></section><div class="container legal-layout"><aside class="legal-sidebar"><p class="small-label">${ui("legalNav")}</p><nav aria-label="${ui("legalNav")}">${legal.sections.map(section => `<a href="#${escape(section.id)}">${escape(section.title)}</a>`).join("")}</nav></aside><article class="legal-content"><div class="legal-notice"><span aria-hidden="true">◇</span><p>${escape(legal.notice)}</p></div>${legal.sections.map(section => `<section id="${escape(section.id)}"><h2>${escape(section.title)}</h2>${section.paragraphs.map(paragraph => `<p>${escape(paragraph)}</p>`).join("")}</section>`).join("")}<div class="legal-related"><span class="small-label">${ui("related")}</span>${[["privacy", 8], ["terms", 9], ["ai", 5], ["support", 6]].filter(([key]) => key !== page).map(([key, index]) => `<a href="${key}.html">${escape(t("ui.footerLinks")[index])}${arrow}</a>`).join("")}</div></article></div>`;
   }
 
-  if (page !== "login") document.querySelector("#main").innerHTML = page === "home" ? homeMarkup() : page === "workbench" ? workbenchMarkup() : page === "about" ? aboutMarkup() : page === "trust" ? trustMarkup() : legalMarkup();
+  if (page !== "login") {
+    // 二级页统一返回条：所有非首页内容页在正文顶部提供同一样式的返回入口。
+    const backBar = page === "home" ? "" : `<p class="page-back container"><a href="index.html">${ui("back")}</a></p>`;
+    document.querySelector("#main").innerHTML = backBar + (page === "home" ? homeMarkup() : page === "workbench" ? workbenchMarkup() : page === "about" ? aboutMarkup() : page === "trust" ? trustMarkup() : legalMarkup());
+  }
 
 
   function demoDataset(revised = false) {
@@ -294,10 +314,34 @@
     const form = document.querySelector("#inquiry-form");
     const result = document.querySelector("#form-result");
     const copyArea = document.querySelector("#copy-area");
+    const nextGuide = document.querySelector("#inquiry-next");
     const output = document.querySelector("#inquiry-json");
     let cached = null;
     let cachedSignature = null;
-    const invalidate = () => { copyArea.hidden = true; output.value = ""; result.textContent = ""; };
+    let pasteText = "";
+    const feishuUrl = typeof t("inquiry.feishuUrl") === "string" ? t("inquiry.feishuUrl") : "";
+    const invalidate = () => { copyArea.hidden = true; nextGuide.hidden = true; output.value = ""; pasteText = ""; result.textContent = ""; };
+    const legacyCopy = text => {
+      // A native modal <dialog> makes the rest of the document inert, so the
+      // helper must live inside the dialog to stay selectable.
+      const host = output.closest("dialog") || document.body;
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.setAttribute("readonly", "");
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      host.append(helper);
+      helper.select();
+      const copied = document.execCommand("copy");
+      helper.remove();
+      return copied;
+    };
+    const copyDraft = async () => {
+      if (!pasteText) return false;
+      if (globalThis.navigator?.clipboard?.writeText) await globalThis.navigator.clipboard.writeText(pasteText);
+      else if (!legacyCopy(pasteText)) throw Error("copy_failed");
+      return true;
+    };
     form.addEventListener("input", invalidate);
     form.addEventListener("change", invalidate);
     form.addEventListener("reset", () => { cached = null; cachedSignature = null; invalidate(); result.textContent = t("ui.cleared"); });
@@ -317,6 +361,17 @@
         cached = JSON.stringify(envelope, null, 2);
         cachedSignature = signature;
       }
+      // A labelled, Feishu-pasteable projection of the same draft: Copo's
+      // reception can lift the fields and the event key straight from it.
+      const service = t("home").services.find(item => item.id === envelope.inquiry.package_id);
+      const inquiry = envelope.inquiry;
+      pasteText = [
+        `${ui("pasteKicker")}${ui("pasteService")}：${service ? service.title : inquiry.package_id}`,
+        `${ui("pasteTitle")}：${inquiry.title}`,
+        `${ui("pasteDescription")}：${inquiry.description}`,
+        `${ui("pasteAcceptance")}：${inquiry.acceptance}`,
+        `${ui("pasteFooter")}`,
+      ].join("\n") + `\nID ${inquiry.event_key}`;
       return cached;
     }
     document.querySelector("#generate-inquiry").addEventListener("click", () => {
@@ -324,7 +379,19 @@
       if (!text) return;
       output.value = text;
       copyArea.hidden = false;
+      nextGuide.hidden = false;
       result.textContent = t("ui.generated");
+    });
+    document.querySelector("#copy-draft")?.addEventListener("click", async () => {
+      try { await copyDraft(); result.textContent = t("ui.copyDraftDone"); }
+      catch { result.textContent = t("ui.copyFailed"); }
+    });
+    document.querySelector("#open-feishu")?.addEventListener("click", async () => {
+      try {
+        await copyDraft();
+        globalThis.open(feishuUrl, "_blank", "noopener");
+        result.textContent = t("ui.feishuOpened");
+      } catch { result.textContent = t("ui.copyFailed"); }
     });
     form.addEventListener("submit", event => {
       event.preventDefault();
@@ -339,6 +406,7 @@
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       result.textContent = t("ui.downloaded");
+      nextGuide.hidden = false;
     });
   }
 
