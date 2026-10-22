@@ -35,6 +35,16 @@ globalThis.CopoPublicTools = {
         ],
         "name": "逆向研究",
         "summary": "功能分析与工具研究"
+      },
+      {
+        "id": "improvement-workflow",
+        "product": "Codex + agent-skills",
+        "stage": "available",
+        "purposes": [
+          "internal"
+        ],
+        "name": "改进工作流",
+        "summary": "角色任务、实际产出与阻塞"
       }
     ]
   }
