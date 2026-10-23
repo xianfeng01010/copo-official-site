@@ -2323,3 +2323,27 @@ body[data-page="home"] .faq-list summary, body[data-page="home"] .faq-list detai
   --copo-font: "Avenir Next", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
   --copo-font-display: "Baskerville", "Iowan Old Style", "Noto Serif CJK SC", "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
 }
+
+/* ===================== 首页交互机器人（website-robot.js） =====================
+ * 层级低于粘性导航（header z-index 10），从导航下滑过而非盖住导航；
+ * 命中区为唯一可交互元素，气泡只读；reduced-motion 下无动画无游走。 */
+:root { --copo-robot-size: 104px; --copo-robot-safe-b: env(safe-area-inset-bottom, 0px); }
+@media (max-width: 719px) { :root { --copo-robot-size: 64px; } }
+#copo-robot-layer { position: fixed; left: 0; top: 0; z-index: 8; width: 0; height: 0; pointer-events: none; }
+.copo-robot-hit { position: absolute; left: 0; top: 0; width: var(--copo-robot-size); height: var(--copo-robot-size); padding: 0; border: 0; margin: 0; background: none; border-radius: 50%; pointer-events: auto; cursor: grab; -webkit-tap-highlight-color: transparent; }
+.copo-robot-hit:active { cursor: grabbing; }
+.copo-robot-hit:focus-visible { outline: 2px solid var(--copo-accent); outline-offset: 4px; }
+.copo-robot-host { display: block; width: 100%; height: 100%; }
+.copo-robot-host canvas { display: block; }
+.copo-robot-bubble { position: absolute; left: calc(var(--copo-robot-size) + 14px); top: 50%; transform: translateY(-50%) scale(.92); transform-origin: left center; max-width: 230px; padding: 9px 13px; border: 1px solid var(--copo-line); border-radius: 14px 14px 14px 4px; background: var(--copo-surface); color: var(--copo-ink); font: 500 12px/1.65 var(--copo-font); letter-spacing: .01em; box-shadow: 0 10px 24px -12px #15151540; opacity: 0; visibility: hidden; transition: opacity .28s ease, transform .28s cubic-bezier(.2,.9,.25,1.24), visibility 0s linear .28s; white-space: normal; text-align: left; }
+.copo-robot-bubbling .copo-robot-bubble { opacity: 1; visibility: visible; transform: translateY(-50%) scale(1); transition-delay: 0s; }
+/* 出入场动画由引擎官方 gather 门式特效承担（robot.js gate），不再用 CSS pop */
+@media (max-width: 719px) {
+  .copo-robot-bubble { left: 50%; top: auto; bottom: calc(var(--copo-robot-size) + 12px); transform: translateX(-50%) scale(.92); transform-origin: bottom center; border-radius: 14px 14px 4px 14px; max-width: 76vw; }
+  .copo-robot-bubbling .copo-robot-bubble { transform: translateX(-50%) scale(1); }
+}
+#copo-robot-layer.copo-robot-sleeping .copo-robot-hit { filter: saturate(.82) brightness(1.02); }
+@media (prefers-reduced-motion: reduce) {
+  .copo-robot-host { transform: none !important; } /* 引擎已静态帧；禁用呼吸缩放 */
+  .copo-robot-bubble { transition: opacity .1s linear; transform: translateY(-50%); }
+}
