@@ -388,7 +388,9 @@
         for (const x of [b.right, b.left, (b.left + b.right) / 2]) candidates.push({ x, y });
       return candidates.find(p => safe(p, resting)) || candidates.find(p => safe(p)) || home;
     }
-    setPoint(safeDock(read()));
+    /* o.anchorOnly=true：宿主自管落位（旅程模型开场在 logo 旁），仅在越界时钳回，不做 safeDock 重定位 */
+    if (o.anchorOnly) { const b = bounds(), d0 = read(); setPoint({ x: clamp(d0.x, b.left, Math.max(b.left, b.right)), y: clamp(d0.y, b.top, Math.max(b.top, b.bottom)) }); }
+    else setPoint(safeDock(read()));
     const controller = create({ read, write: setPoint, size, bounds, safe, reduced,
       hidden: saved, persist: v => { try { localStorage.setItem('copo.robot.hidden', String(v)); } catch (_) {} },
       before: action => { o.before?.(action); orbitSize = action === 'orbit' && innerWidth < 720 ? 36 : null; obstacles = obstacleRects(blocked); robot.setPerforming?.(true); },
