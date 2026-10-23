@@ -86,6 +86,11 @@
     if (!pool.length) pool = BASE_BODIES.slice();
     return pool[Math.floor(rng() * pool.length) % pool.length];
   }
+  /* 表单陪伴阶段：聚焦中且刚打过字=writing（帮你记录），停顿转回 listening（等你继续说） */
+  function formStage({ focused = false, lastType = 0, now = 0 } = {}) {
+    if (!focused) return null;
+    return now - lastType < 1800 ? "writing" : "listening";
+  }
   /* 闲置阶段：<30s 无、<60s drowsy、≥60s sleeping */
   function idleStage(idleMs, drowsyAt = 30000, sleepAt = 60000) {
     if (idleMs >= sleepAt) return "sleeping";
@@ -93,7 +98,7 @@
     return null;
   }
   const logic = { gazeFrom, filterAnchors, pickAnchor, wanderDelay, idleStage, isInteractiveEl, isBlockedEl,
-    floatDrift, breath, pickAmbient, ambientDelay, springStep, softBounds, dragMood, dropMood, pickBody };
+    floatDrift, breath, pickAmbient, ambientDelay, springStep, softBounds, dragMood, dropMood, pickBody, formStage };
   globalThis.CopoWebsiteRobotLogic = logic;
 
   /* ---------------- DOM 层 ---------------- */
@@ -193,10 +198,10 @@
     return filterAnchors(pts.map(p => ({ x: clampX(p.x), y: clampY(p.y) })), probe);
   }
   function place(pt) { state.x = pt.x; state.y = pt.y; state.anchor = pt; }
-  function teleport(pt) {
+  function teleport(pt, opts = {}) {
     place(pt); layer.style.transform = `translate3d(${pt.x}px, ${pt.y}px, 0)`;
-    /* 每次出门换副新样子（基础形体池避开当前） */
-    robot.setBody(pickBody(rng, robot.body), 12);
+    /* 每次出门换副新样子（基础形体池避开当前）；表单陪伴传送保持当前形体不打断陪伴氛围 */
+    if (!opts.keepBody) robot.setBody(pickBody(rng, robot.body), 12);
     if (!motion?.hidden) motion?.controller.show();
   }
   function spawn() { const a = pickAnchor(sectionCandidates(), rng, null); place(a || { x: innerWidth - SIZE() * 1.6, y: innerHeight * .4 }); }
@@ -223,10 +228,12 @@
     state.mode = "react";
   }
   const idleish = () => ["idle", "humming", "listening", "thinking", "waiting"].includes(robot.state);
-  /* 反应到期恢复 free 并回基态（happy/laughing/scared 等无 next 的状态不会自己走） */
+  let formMode = false, formTypedAt = 0, formTeleportAt = 0;
+  /* 反应到期恢复 free 并回基态（happy/laughing/scared 等无 next 的状态不会自己走）；
+   * 表单陪伴模式（writing/listening）由 formStage 管理不在此回落 */
   function settleReact(now) {
     if (state.mode === "react" && now > state.busyUntil) state.mode = "free";
-    if (state.mode === "free" && now > state.busyUntil && !idleish() && !robot.gating && !state.drag && !state.fly)
+    if (!formMode && state.mode === "free" && now > state.busyUntil && !idleish() && !robot.gating && !state.drag && !state.fly)
       robot.setState("idle");
   }
 
@@ -484,6 +491,7 @@
     state.mode = "free"; state.busyUntil = performance.now() + 1000;
   }
   motion = globalThis.CopoRobotMotion?.attach({ target: layer, visual: hit, robot,
+    controls: false, /* 官网隐藏动作入口：表演改为跟随用户真实用途联动触发 */
     size: () => compact ? (isMobile() ? 36 : 64) : SIZE(), scale: () => (isMobile() ? 36 : 64) / SIZE(), read: () => ({ x: state.x, y: state.y }),
     write: p => { state.x = p.x; state.y = p.y; layer.style.transform = `translate3d(${p.x}px, ${p.y}px, 0)`; },
     before: action => { stopLegacy(); compact = action === 'orbit'; },
@@ -511,6 +519,97 @@
     }
   });
   globalThis.CopoWebsiteRobotMotion = motion;
+
+  /* ---- 用户真实用途联动（机器人对访客在网站里的实际操作做出反应） ---- */
+  function lookAtEl(el) {
+    const r = el.getBoundingClientRect(), hr = host.getBoundingClientRect();
+    const [gx, gy] = logic.gazeFrom(hr, r.left + r.width / 2, r.top + r.height / 2);
+    robot.look(gx, gy, 2.4);
+  }
+  /* 1) 需求表单陪伴：聚焦 → 传送到对话框旁 listening（等你说话）；打字 → writing（帮你记录）；
+        停顿 1.8s 回 listening；整体失焦 → 退出陪伴回常规。 */
+  const inForm = el => !!(el && el.closest && el.closest("#inquiry-form, #inquiry-dialog"));
+  on(document, "focusin", e => {
+    if (!inForm(e.target) || reduced) return;
+    formMode = true; state.idleAt = performance.now();
+    const now = performance.now();
+    if (now - formTeleportAt > 45000 && !state.drag && !state.fly && !performing() && !robot.gating) {
+      const dlg = document.getElementById("inquiry-dialog");
+      if (dlg) {
+        const r = dlg.getBoundingClientRect();
+        const spot = { x: clampX(Math.min(innerWidth - SIZE() - pad(), r.right + 36)), y: clampY(r.top + 30) };
+        const el = probe(spot.x + SIZE() / 2, spot.y + SIZE() / 2);
+        if (el && !isBlockedEl(el)) { formTeleportAt = now; teleport(spot, { keepBody: true }); }
+      }
+    }
+    if (robot.state !== "writing") react("listening", 3600);
+  }, true);
+  on(document, "input", e => {
+    if (!inForm(e.target) || reduced) return;
+    formTypedAt = performance.now(); state.idleAt = formTypedAt;
+    if (robot.state !== "writing") robot.setState("writing");
+  }, true);
+  every(() => {
+    if (!formMode || reduced || state.drag || state.fly || performing()) return;
+    const stage = logic.formStage({ focused: formMode, lastType: formTypedAt, now: performance.now() });
+    if (stage && robot.state !== stage && (robot.state === "writing" || robot.state === "listening" || idleish()))
+      robot.setState(stage);
+  }, 900);
+  on(document, "focusout", e => {
+    if (!inForm(e.target)) return;
+    later(() => {
+      const a = document.activeElement;
+      if (!inForm(a)) {
+        formMode = false;
+        if (["writing", "listening"].includes(robot.state)) robot.setState("idle");
+      }
+    }, 140);
+  }, true);
+  /* 2) 意图达成（生成/下载/复制草稿、打开飞书）：庆祝 + 星光 */
+  on(document, "click", e => {
+    const b = e.target.closest && e.target.closest("#generate-inquiry, #copy-draft, #open-feishu, #inquiry-form button[type=submit]");
+    if (!b || reduced || performing()) return;
+    react("celebrate", 2600);
+    robot.poke("spin", { turns: 1 });
+    robot.burst(12);
+  }, true);
+  /* 3) CTA/服务标签点击（表达委托意图）：高兴点头（节流 8s） */
+  let ctaAt = 0;
+  on(document, "click", e => {
+    const b = e.target.closest && e.target.closest("main a.button, .faq-contact-action, [data-service]");
+    if (!b || reduced || performing() || state.drag) return;
+    const now = performance.now();
+    if (now - ctaAt < 8000) return;
+    ctaAt = now;
+    react("happy", 1800); robot.poke("nod");
+  }, true);
+  /* 4) FAQ 展开问题：好奇歪头看那条 */
+  on(document, "click", e => {
+    const s = e.target.closest && e.target.closest(".faq-list summary");
+    if (!s || reduced || performing()) return;
+    react("curious", 2400); lookAtEl(s);
+  }, true);
+  /* 5) 阅读中划选文本（≥15 字）：好奇看向选区（节流 6s） */
+  let selAt = 0;
+  on(document, "selectionchange", () => {
+    if (reduced || performing() || state.drag) return;
+    const now = performance.now();
+    if (now - selAt < 6000) return;
+    const sel = document.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+    if ((sel.toString() || "").length < 15) return;
+    const r = sel.getRangeAt(0).getBoundingClientRect();
+    if (!r.width && !r.height) return;
+    selAt = now;
+    react("curious", 1800);
+    lookAtEl({ getBoundingClientRect: () => r });
+  });
+  /* 6) 语言切换：先惊讶（语言变了？）再高兴点头 */
+  on(document, "change", e => {
+    if (e.target.id !== "locale-select" || reduced || performing()) return;
+    react("surprised", 900);
+    later(() => { react("happy", 1600); robot.poke("nod"); }, 900);
+  }, true);
   on(document, "visibilitychange", () => {
     if (document.hidden) { if (frameId) cancelAnimationFrame(frameId); frameId = 0; if (pointerRaf) cancelAnimationFrame(pointerRaf); pointerRaf = 0; if (scrollRaf) cancelAnimationFrame(scrollRaf); scrollRaf = 0; }
     else startFrame();
