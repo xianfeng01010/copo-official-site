@@ -297,6 +297,8 @@
     notifying: { clips: ["Done_B"], face: "surprised", next: "idle", holdSeconds: 1.2 },
     dragging: { clips: ["Idle_B"], face: "surprised" },
     spawning: { clips: ["Idle_B"] },
+    /* 官方 morph 系语义态（dictating/writing 等）：剪辑挂 Idle_B，官网表单陪伴联动使用 writing */
+    writing: { clips: ["Idle_B"] },
     logo: { clips: ["Logo_A", "Logo_B"] },
     showcase: { clips: ["Marketing_A", "Marketing_B", "Marketing_C", "Marketing_D"] },
     turntable: { clips: ["Rotation_B"] },
@@ -464,7 +466,9 @@
   function themePalette(background) {
     const rgb = background?.startsWith('#') ? (() => { const h = background.slice(1); const v = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16); return [v >> 16 & 255, v >> 8 & 255, v & 255]; })() : (background?.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
     const dark = rgb.length === 3 && rgb[0] * .299 + rgb[1] * .587 + rgb[2] * .114 < 128;
-    return dark ? { ink: '#575469', bg: '#fff8ed' } : { ink: '#333143', bg: '#fff8ed' };
+    /* 浅页与官网站内既有色对同源（inquiry-next 步骤块 #261f2a 底 / #f9f5f9 字）：
+       深墨紫黑机身 + 亮纸白眼，比石墨紫更贴官网 ink/paper 编辑风 */
+    return dark ? { ink: '#575469', bg: '#fff8ed' } : { ink: '#261f2a', bg: '#f9f5f9' };
   }
   const view = { ctx: null, size: 64, dpr: 1, ink: '#ffffff', bg: '#0a1120', accent: '#8fb7ff',
     shadow: null, running: false, visible: true, reduced: false, appearance: 'grok', heading: null, headingYaw: 0, headingPitch: 0, performing: false, motor: 0, display: null };
