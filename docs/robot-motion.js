@@ -150,22 +150,31 @@
     }
     function frame(now) {
       raf = 0; if (destroyed || !active) return;
-      const action = active, u = clamp((now - began) / duration, 0, 1);
-      let p = { ...origin, angle: 0 }, progress = u;
-      if (path) {
-        const travel = action === 'rocket' ? clamp((u - .12) / .76, 0, 1) : action === 'orbit' ? clamp((u - 350 / duration) / (1 - 350 / duration), 0, 1) : u;
-        progress = ease(travel);
-        p = pathSample(path, progress);
-        a.write({ x: p.x, y: p.y });
-      }
-      a.effect({ action, u, progress, ...p, elapsed: now - began });
-      if (u >= 1) { clear(); notify({ ok: true }); }
-      else raf = clock.request(frame);
+      try {
+        const action = active, u = clamp((now - began) / duration, 0, 1);
+        let p = { ...origin, angle: 0 }, progress = u;
+        if (path) {
+          const travel = action === 'rocket' ? clamp((u - .12) / .76, 0, 1) : action === 'orbit' ? clamp((u - 350 / duration) / (1 - 350 / duration), 0, 1) : u;
+          progress = ease(travel);
+          p = pathSample(path, progress);
+          a.write({ x: p.x, y: p.y });
+        }
+        a.effect({ action, u, progress, ...p, elapsed: now - began });
+        if (u >= 1) { clear(); notify({ ok: true }); }
+        else raf = clock.request(frame);
+      } catch (e) { clear(); /* 单帧失败即收场，杜绝 active 卡住禁用全部联动 */ }
     }
     function begin(action, ms, points = null) {
       origin = { ...a.read() }; active = action; began = clock.now(); duration = ms; path = points;
-      a.visibility(true); a.write(origin); a.effect({ action, u: 0, progress: 0, ...origin, angle: points ? pathSample(points, 0).angle : 0, elapsed: 0 });
-      raf = clock.request(frame); return notify({ ok: true });
+      try {
+        a.visibility(true); a.write(origin); a.effect({ action, u: 0, progress: 0, ...origin, angle: points ? pathSample(points, 0).angle : 0, elapsed: 0 });
+        raf = clock.request(frame); return notify({ ok: true });
+      } catch (e) {
+        /* 首帧失败即收场，杜绝 active 卡住禁用宿主全部联动 */
+        origin = null; active = null; if (raf) clock.cancel(raf); raf = 0;
+        try { a.effect(null); a.visibility(!hidden); } catch (_) {}
+        return notify({ ok: false, reason: 'error' });
+      }
     }
     const api = {
       get active() { return active; }, get hidden() { return hidden; },
@@ -216,7 +225,9 @@
       if (['rocket', 'orbit'].includes(action)) b.className = 'copo-motion-feature';
       buttons[action] = b; panel.appendChild(b);
     }
-    panel.appendChild(status); bar.append(panel, toggle); document.body.appendChild(bar);
+    panel.appendChild(status); bar.append(panel, toggle);
+    /* controls:false：宿主要求隐藏动作入口（联动由页面驱动）——不挂 DOM，内部状态照常维护 */
+    if (o.controls !== false) document.body.appendChild(bar);
     const fx = document.createElement('canvas'); fx.className = 'copo-motion-effects'; fx.setAttribute('aria-hidden', 'true'); document.body.appendChild(fx);
     const ctx = fx.getContext('2d');
     let destroyed = false, lastAuto = performance.now(), lastInput = performance.now();
