@@ -518,6 +518,14 @@ globalThis.CopoWebsiteCopy = {
         "disclosureText": "本预览没有宣称安全认证、零泄露或全面合规。正式主体、联系渠道、处理地区、资料保留期限和接收方关系仍需核定。当前法律页面为阅读草案，尚未生效。"
       },
       "landing": {
+        "robot": {
+          "label": "Copo 小助手（可以点它、拖动它）",
+          "sleep": "zZ…（戳一下唤醒）",
+          "celebrate": "和 Copo 一起把交付做好！",
+          "pricing": "在这里看看报价与项目的透明约定。",
+          "faq": "有疑问？这区的答案都在这里。",
+          "inquiry": "从这里开始，把需求交给 Copo。"
+        },
         "status": {
           "eyebrow": "WHAT'S NEW",
           "title": "Copo 当前的状态",
